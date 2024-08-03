@@ -275,6 +275,10 @@ class SimCCHead(BaseHead):
         else:
             batch_pred_x, batch_pred_y = self.forward(feats)
 
+        # 把结果转换成 坐标 和 置信度
+        # 这里会调用 
+        # decode @ mmpose/codecs/simcc_label.py  
+        # get_simcc_maximum  @ mmpose/codecs/utils/post_processing.py
         preds = self.decode((batch_pred_x, batch_pred_y))
 
         if test_cfg.get('output_heatmaps', False):
@@ -285,6 +289,8 @@ class SimCCHead(BaseHead):
                               'between the keypoint scores and the 1D heatmaps'
                               '.')
 
+            # simcc_head 生成2d heatmap前归一化 会传入 decode的sigma
+            # rtmcc_head 不会传入sigma
             # normalize the predicted 1d distribution
             sigma = self.decoder.sigma
             batch_pred_x = get_simcc_normalized(batch_pred_x, sigma[0])

@@ -35,6 +35,7 @@ def process_one_image(args,
     """Visualize predicted keypoints (and heatmaps) of one image."""
 
     # predict bbox
+    # 目标框检测 
     det_result = inference_detector(detector, img)
     pred_instance = det_result.pred_instances.cpu().numpy()
     bboxes = np.concatenate(
@@ -44,7 +45,13 @@ def process_one_image(args,
     bboxes = bboxes[nms(bboxes, args.nms_thr), :4]
 
     # predict keypoints
+    # 关键点检测 
     pose_results = inference_topdown(pose_estimator, img, bboxes)
+
+    # mmpose.structures import merge_data_samples 结构化 但是heatmap是上面已经生成的 
+    # 输入是 data_samples: List[PoseDataSample]
+    # 输出是 PoseDataSample:
+    # ?? 为什么要merge ??
     data_samples = merge_data_samples(pose_results)
 
     # show the results
@@ -53,6 +60,7 @@ def process_one_image(args,
     elif isinstance(img, np.ndarray):
         img = mmcv.bgr2rgb(img)
 
+    # 这里处理可视化! (上面应该在data_sample中包含了heatmap)
     if visualizer is not None:
         visualizer.add_datasample(
             'result',

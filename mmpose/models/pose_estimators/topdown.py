@@ -106,6 +106,10 @@ class TopdownPoseEstimator(BasePoseEstimator):
         else:
             feats = self.extract_feat(inputs)
 
+        # head 配置文件写的是 RTMCCHead
+        # mmpose/models/heads/coord_cls_heads/rtmcc_head.py
+        # 如果支持 RTMCCHead.forward 不会有heatmap 
+        # 如果支持 RTMCCHead.predict 
         preds = self.head.predict(feats, data_samples, test_cfg=self.test_cfg)
 
         if isinstance(preds, tuple):

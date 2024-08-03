@@ -155,6 +155,16 @@ def inference_topdown(model: nn.Module,
     scope = model.cfg.get('default_scope', 'mmpose')
     if scope is not None:
         init_default_scope(scope)
+
+    # 读取 模型 config python文件中 的 test_dataloader = val_dataloader 
+    # 
+    # val_pipeline = [
+    #       dict(type='LoadImage', backend_args=backend_args),
+    #       dict(type='GetBBoxCenterScale'),
+    #       dict(type='TopdownAffine', input_size=codec['input_size']),
+    #       dict(type='PackPoseInputs')
+    #    ]
+
     pipeline = Compose(model.cfg.test_dataloader.dataset.pipeline)
 
     if bboxes is None or len(bboxes) == 0:
@@ -187,12 +197,15 @@ def inference_topdown(model: nn.Module,
         data_info.update(model.dataset_meta)
         data_list.append(pipeline(data_info))
 
+    # 每个box有自己的 pipeline(传入data_info)实例 
     if data_list:
         # collate data list into a batch, which is a dict with following keys:
         # batch['inputs']: a list of input images
         # batch['data_samples']: a list of :obj:`PoseDataSample`
         batch = pseudo_collate(data_list)
         with torch.no_grad():
+            #  这类推理
+            # model TopdownPoseEstimator  mmpose/mmpose/models/pose_estimators/topdown.py
             results = model.test_step(batch)
     else:
         results = []

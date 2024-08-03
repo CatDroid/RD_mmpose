@@ -558,12 +558,18 @@ class PoseLocalVisualizer(OpencvBackendVisualizer):
         """
         if 'heatmaps' not in fields:
             return None
+        # 结果中包含 heatmaps字段  
         heatmaps = fields.heatmaps
         _, h, w = heatmaps.shape
+
+        # heatmaps 如果不是torch 转换成torch
         if isinstance(heatmaps, np.ndarray):
             heatmaps = torch.from_numpy(heatmaps)
+
+        # 2d-heatmaps 和 1d-heatmaps 如果需要mix 2d-heatmap 会用到 overlaid_image, 返回 out_image
         out_image = SimCCVisualizer().draw_instance_xy_heatmap(
             heatmaps, overlaid_image, n)
+
         out_image = cv2.resize(out_image[:, :, ::-1], (w, h))
         return out_image
 
@@ -658,8 +664,11 @@ class PoseLocalVisualizer(OpencvBackendVisualizer):
                         pred_img_data, data_sample.pred_instances)
 
             # draw heatmaps
+            # 如果设置了 draw_heatmap=True  并且 字典 data_sample中包含 'pred_fields'
             if 'pred_fields' in data_sample and draw_heatmap:
                 if 'keypoint_x_labels' in data_sample.pred_instances:
+                    # 并且 字典 data_sample.pred_instances 包含 'keypoint_x_labels' 
+                    # 实际上 还要求 data_sample.pred_fields 包含 'heatmaps'
                     pred_img_heatmap = self._draw_instance_xy_heatmap(
                         data_sample.pred_fields, image)
                 else:

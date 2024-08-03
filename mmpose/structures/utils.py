@@ -38,6 +38,10 @@ def merge_data_samples(data_samples: List[PoseDataSample]) -> PoseDataSample:
 
     merged = PoseDataSample(metainfo=data_samples[0].metainfo)
 
+    # merged 是个 PoseDataSample 实例 
+    # merged 的 gt_instances  pred_instances 是个 InstanceData 实例
+    # merged 的 gt_fields     pred_fields    是个 PixelData 实例 
+
     if 'gt_instances' in data_samples[0]:
         merged.gt_instances = InstanceData.cat(
             [d.gt_instances for d in data_samples])
@@ -46,6 +50,7 @@ def merge_data_samples(data_samples: List[PoseDataSample]) -> PoseDataSample:
         merged.pred_instances = InstanceData.cat(
             [d.pred_instances for d in data_samples])
 
+    # 这里传入的 data_samples 已经有 heatmaps ??
     if 'pred_fields' in data_samples[0] and 'heatmaps' in data_samples[
             0].pred_fields:
         reverted_heatmaps = [
@@ -55,6 +60,7 @@ def merge_data_samples(data_samples: List[PoseDataSample]) -> PoseDataSample:
             for data_sample in data_samples
         ]
 
+        # merged 的 pred_fields 是个PixelData实例 
         merged_heatmaps = np.max(reverted_heatmaps, axis=0)
         pred_fields = PixelData()
         pred_fields.set_data(dict(heatmaps=merged_heatmaps))
@@ -69,6 +75,7 @@ def merge_data_samples(data_samples: List[PoseDataSample]) -> PoseDataSample:
             for data_sample in data_samples
         ]
 
+        # merged 的 gt_fields 也 是个PixelData实例  
         merged_heatmaps = np.max(reverted_heatmaps, axis=0)
         gt_fields = PixelData()
         gt_fields.set_data(dict(heatmaps=merged_heatmaps))

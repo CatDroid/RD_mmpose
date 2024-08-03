@@ -90,6 +90,8 @@ class RTMCCHead(BaseHead):
 
         self.loss_module = MODELS.build(loss)
         if decoder is not None:
+            #print(f"decoder = {decoder}")
+            # decoder = {'type': 'SimCCLabel', 'input_size': (256, 256), 'sigma': (12, 12), 'simcc_split_ratio': 2.0, 'normalize': False, 'use_dark': False}
             self.decoder = KEYPOINT_CODECS.build(decoder)
         else:
             self.decoder = None
@@ -158,6 +160,8 @@ class RTMCCHead(BaseHead):
         pred_x = self.cls_x(feats)
         pred_y = self.cls_y(feats)
 
+        # 最后输出 并没有用softmax 或者sigmid 没有保证在0到1之间
+
         return pred_x, pred_y
 
     def predict(
@@ -199,6 +203,7 @@ class RTMCCHead(BaseHead):
             _batch_pred_x, _batch_pred_y = self.forward(_feats)
 
             _batch_pred_x_flip, _batch_pred_y_flip = self.forward(_feats_flip)
+            # 这里推理第二次 
             _batch_pred_x_flip, _batch_pred_y_flip = flip_vectors(
                 _batch_pred_x_flip,
                 _batch_pred_y_flip,
@@ -206,11 +211,22 @@ class RTMCCHead(BaseHead):
 
             batch_pred_x = (_batch_pred_x + _batch_pred_x_flip) * 0.5
             batch_pred_y = (_batch_pred_y + _batch_pred_y_flip) * 0.5
+            #print(f"flip_test is True") # 会打印这个 把图片左右镜像 再测试一次 
         else:
             batch_pred_x, batch_pred_y = self.forward(feats)
+            #print(f"flip_test is False")
 
+        # 把结果转换成 坐标 和 置信度
+        # 这里会调用 
+        # decode @ mmpose/codecs/simcc_label.py  
+        # get_simcc_maximum  @ mmpose/codecs/utils/post_processing.py
         preds = self.decode((batch_pred_x, batch_pred_y))
 
+        # demo/topdown_demo_with_mmdet.py  
+        # 会传入 
+        # test_cfg=dict(output_heatmaps=args.draw_heatmap)
+        # 所以如果需要draw_heatmap 这类就会 True  1d分布会转换成 2d-heatmap
+        
         if test_cfg.get('output_heatmaps', False):
             rank, _ = get_dist_info()
             if rank == 0:
@@ -219,15 +235,40 @@ class RTMCCHead(BaseHead):
                               'between the keypoint scores and the 1D heatmaps'
                               '.')
 
+            # simcc value为了可视化 被归一化了 , 也就是1D-heatmaps已经归一化了 
+            # 但是 keypoint的score还是用原来没有归一化的 所以score跟看到的1D-heatmaps的概率值不同
+
+            # 1D分布batch_pred_x和batch_pred_y进行归一化
             # normalize the predicted 1d distribution
+
+            # 配置文件是 
+            # input_size=(256, 256),
+            # simcc_split_ratio=2.0,
+            # before batch_pred_x = torch.Size([3, 3, 512])  [第几个框, 3个关键点, input*ratio?]
+            #print(f"before batch_pred_x = {batch_pred_x.shape}")
+            #print(f"before batch_pred_x = {batch_pred_x}")
+
+            # mmpose/codecs/utils/post_processing.py
+            # after batch_pred_x = torch.Size([3, 3, 512])
+            # 这里不传入sigma  simcc_head.py 会传入decoder的sigma 
+            # 分别对x坐标 和 y坐标调用
+            # 对负数直接设置为0
+            # 如果 向量 的最大值 超过1, 才会做 该向量的 归一化(除以该向量中的最大元素)
             batch_pred_x = get_simcc_normalized(batch_pred_x)
             batch_pred_y = get_simcc_normalized(batch_pred_y)
 
+
+            #print(f"after batch_pred_x = {batch_pred_x.shape}")
+            #print(f"after batch_pred_x = {batch_pred_x}")
+
+            # 重新整形1D分布以构造2D热图
             B, K, _ = batch_pred_x.shape
             # B, K, Wx -> B, K, Wx, 1
             x = batch_pred_x.reshape(B, K, 1, -1)
             # B, K, Wy -> B, K, 1, Wy
             y = batch_pred_y.reshape(B, K, -1, 1)
+
+            # 通过矩阵乘法torch.matmul生成2D热图batch_heatmaps
             # B, K, Wx, Wy
             batch_heatmaps = torch.matmul(y, x)
             pred_fields = [
