@@ -398,6 +398,8 @@ class MSPNHead(BaseHead):
                                      dim=1)
         keypoint_weights = keypoint_weights.transpose(0, 1)  # [B*N, L, K]
 
+        # config文件 num_stages 1 2 3 4 都有 , 每个stage的heapmapSize都一样 但是kernelsize越来越小 代表越来越精确
+
         # calculate losses over multiple stages and multiple units
         losses = dict()
         for i in range(self.num_stages * self.num_units):
