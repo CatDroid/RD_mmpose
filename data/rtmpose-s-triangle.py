@@ -108,6 +108,7 @@ model = dict(
         expand_ratio=0.5,
         deepen_factor=0.33,
         widen_factor=0.5,
+        # backbone需要导出哪些层的输出
         out_indices=(4, ),
         channel_attention=True,
         norm_cfg=dict(type='SyncBN'),
@@ -125,6 +126,7 @@ model = dict(
         in_featuremap_size=(8, 8),
         simcc_split_ratio=codec['simcc_split_ratio'],
         final_layer_kernel_size=7,
+        # RTMPose增加的GAU作为neck
         gau_cfg=dict(
             hidden_dims=256,
             s=128,
@@ -134,6 +136,7 @@ model = dict(
             act_fn='SiLU',
             use_rel_bias=False,
             pos_enc=False),
+        # 损失函数使用KLDiscretLoss
         loss=dict(
             type='KLDiscretLoss',
             use_target_weight=True,

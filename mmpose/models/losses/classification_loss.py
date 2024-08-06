@@ -176,10 +176,22 @@ class KLDiscretLoss(nn.Module):
 
     def criterion(self, dec_outs, labels):
         """Criterion function."""
+        # predict都会softmax， 根据beta温度软化
         log_pt = self.log_softmax(dec_outs * self.beta)
         if self.label_softmax:
+            # GT根据参数 是否需要softmatx , 并且区分了 beta 和 label_beta (旧代码没有区分predict和label的温度?bug?)
             labels = F.softmax(labels * self.label_beta, dim=1)
+
+        # log_pt = torch.Size([96, 512])  (B*K, width*spite) 或者  (B*K, height*spite)
+        # labels = torch.Size([96, 512])
+
+        # 为什么在width/height上(1d-heatmap)上做平均? 而不是求和得到这个1d-heatmap的KL散度(规约)
+        # 沿着dim=1（即类别维度）计算平均值
+        # 对每个样本('关键点x坐标' 作为一个样本)，我们得到了所有类别(bin上)的平均KL散度 
+        #  一个样本 在所有类别(width个bin 或者 height个bin)上的 kl散度均值 
         loss = torch.mean(self.kl_loss(log_pt, labels), dim=1)
+
+        # loss = torch.Size([96])  (B*K, )
         return loss
 
     def forward(self, pred_simcc, gt_simcc, target_weight):
@@ -191,27 +203,56 @@ class KLDiscretLoss(nn.Module):
             gt_simcc (Tuple[Tensor, Tensor]): Target representations.
             target_weight (torch.Tensor[N, K] or torch.Tensor[N]):
                 Weights across different labels.
+
+        # 根据 distiller.py 的调用 传入是个元祖  第一个是x [B, K, width*spit], 第二个是y  
+        pred_simcc = (pred_x, pred_y)
+        gt_simcc = (gt_x, gt_y)
+
+        # target_weight (torch.Tensor[N, K]  每个关键点的weight [N, K]   N就是Batch
+
         """
         N, K, _ = pred_simcc[0].shape
         loss = 0
 
+        # 是否使用weight
         if self.use_target_weight:
+            # 输出是一个一维张量，包含了 target_weight 中的所有元素。
+            # 新张量的长度等于原张量中元素的总数。
+            # torch.Size([32, 3]) ->  torch.Size([96])  (B*K, )
             weight = target_weight.reshape(-1)
         else:
             weight = 1.
 
+
         for pred, target in zip(pred_simcc, gt_simcc):
+            # 遍历元祖  pred_simcc gt_simcc是个元祖 分别代表x和y
+            # B=32
+            # K=3
+            # input_size=(256, 256), * simcc_split_ratio=2.0,  = 512
+            
+            # [B, K, width*split  ] 
+            # [B, K, height*split ]
+
+            # pred   = torch.Size([32, 3, 512])
+            # target = torch.Size([32, 3, 512])
+
             pred = pred.reshape(-1, pred.size(-1))
             target = target.reshape(-1, target.size(-1))
 
+            # pred   = torch.Size([96, 512])  # 相当于 合并了3个关键点的x或者y坐标  32*3 B*K 
+            # target = torch.Size([96, 512])  # (B*K, width)
+
+            # weight = torch.Size([96])  # (B*K, )
             t_loss = self.criterion(pred, target).mul(weight)
 
             if self.mask is not None:
                 t_loss = t_loss.reshape(N, K)
                 t_loss[:, self.mask] = t_loss[:, self.mask] * self.mask_weight
 
+            # 所有关键点(有效)求和 
             loss = loss + t_loss.sum()
 
+        # 平均到每种关键点(不是K*2 x,y坐标 也不是每个关键点)
         return loss / K
 
 
